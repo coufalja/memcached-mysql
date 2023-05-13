@@ -1,0 +1,29 @@
+run:
+  timeout: 5m
+linters:
+  disable-all: true
+  enable:
+  - gci
+  - godot
+  - gofumpt
+  - gosimple
+  - govet
+  - gosec
+  - ineffassign
+  - staticcheck
+  - typecheck
+  - unparam
+  - unused
+  - whitespace
+
+linters-settings:
+  gosec:
+    global:
+      audit: true
+
+issues:
+  exclude-rules:
+  - path: _test\.go
+    linters:
+    - ineffassign
+    - gosec
