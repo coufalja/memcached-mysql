@@ -43,23 +43,25 @@ func New(db *sql.DB, mapping []config.Mapping) *MultiProxy {
 		p: make(map[string]*SingleProxy),
 	}
 	for _, m := range mapping {
+		stmt, err := db.Prepare(fmt.Sprintf("SELECT %s FROM %s WHERE %s=?", m.ValueColumn, m.Table, m.KeyColumn))
+		if err != nil {
+			panic(err)
+		}
 		proxy.p[m.Name] = &SingleProxy{
-			query: fmt.Sprintf("SELECT %s FROM %s WHERE %s=?", m.ValueColumn, m.Table, m.KeyColumn),
-			db:    db,
+			query: stmt,
 		}
 	}
 	return proxy
 }
 
 type SingleProxy struct {
-	query string
-	db    *sql.DB
+	query *sql.Stmt
 }
 
 func (c *SingleProxy) Get(key string) memcached.MemcachedResponse {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	row := c.db.QueryRowContext(ctx, c.query, key)
+	row := c.query.QueryRowContext(ctx, key)
 	if row.Err() != nil {
 		return &memcached.ClientErrorResponse{Reason: row.Err().Error()}
 	}

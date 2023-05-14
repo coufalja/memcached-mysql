@@ -45,7 +45,7 @@ func (c *Config) EnsureDefault() {
 	}
 
 	if c.MySQL.Connection == "" {
-		c.MySQL.Connection = "mysql:mysql@/mysql"
+		c.MySQL.Connection = "mysql:mysql@tcp(127.0.0.1:3306)/mysql"
 	}
 	if c.MySQL.ConnMaxLifetime == 0 {
 		c.MySQL.ConnMaxLifetime = 3 * time.Minute
@@ -57,7 +57,7 @@ func (c *Config) EnsureDefault() {
 		c.MySQL.MaxOpenConns = -1
 	}
 
-	for _, mapping := range c.Mapping {
-		mapping.EnsureDefault()
+	for i := range c.Mapping {
+		c.Mapping[i].EnsureDefault()
 	}
 }
