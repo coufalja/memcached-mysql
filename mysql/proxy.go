@@ -16,6 +16,7 @@ const (
 	mappingPrefix  = "@@"
 	mappingSep     = "."
 	defaultMapping = "default"
+	valueSeparator = "|"
 )
 
 type Proxy struct {
@@ -39,7 +40,7 @@ func mappingKey(key string) (string, string, error) {
 		if len(sep) < 2 {
 			return "", "", errors.New("bad key format")
 		}
-		return strings.TrimLeft(sep[0], mappingPrefix), sep[1], nil
+		return strings.TrimLeft(sep[0], "@"), sep[1], nil
 	}
 	return defaultMapping, key, nil
 }
@@ -59,15 +60,17 @@ func New(db *sql.DB, mapping []config.Mapping) *Proxy {
 }
 
 func newTable(db *sql.DB, m config.Mapping) (*tableProxy, error) {
-	stmt, err := db.Prepare(fmt.Sprintf("SELECT %s FROM %s WHERE %s=?", m.ValueColumn, m.Table, m.KeyColumn))
+	columns := strings.Split(m.ValueColumn, valueSeparator)
+	stmt, err := db.Prepare(fmt.Sprintf("SELECT (%s) FROM %s WHERE %s=?", strings.Join(columns, ","), m.Table, m.KeyColumn))
 	if err != nil {
 		return nil, err
 	}
-	return &tableProxy{query: stmt}, nil
+	return &tableProxy{query: stmt, columns: columns}, nil
 }
 
 type tableProxy struct {
-	query *sql.Stmt
+	query   *sql.Stmt
+	columns []string
 }
 
 func (c *tableProxy) Get(key string) memcached.MemcachedResponse {
@@ -77,9 +80,13 @@ func (c *tableProxy) Get(key string) memcached.MemcachedResponse {
 	if row.Err() != nil {
 		return &memcached.ClientErrorResponse{Reason: row.Err().Error()}
 	}
-	res := ""
-	if err := row.Scan(&res); err != nil {
+	container := make([]string, len(c.columns))
+	pointers := make([]interface{}, len(c.columns))
+	for i := range pointers {
+		pointers[i] = &container[i]
+	}
+	if err := row.Scan(pointers...); err != nil {
 		return &memcached.ClientErrorResponse{Reason: err.Error()}
 	}
-	return &memcached.ItemResponse{Item: &memcached.Item{Key: key, Value: []byte(res)}}
+	return &memcached.ItemResponse{Item: &memcached.Item{Key: key, Value: []byte(strings.Join(container, valueSeparator))}}
 }

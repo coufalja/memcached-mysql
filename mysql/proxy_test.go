@@ -38,7 +38,7 @@ func TestNew(t *testing.T) {
 				},
 			},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare("SELECT value FROM test WHERE key=?")
+				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
 			},
 		},
 		{
@@ -60,8 +60,8 @@ func TestNew(t *testing.T) {
 				},
 			},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare("SELECT value FROM test WHERE key=?")
-				s.ExpectPrepare("SELECT value FROM test2 WHERE key=?")
+				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
+				s.ExpectPrepare(`SELECT \(value\) FROM test2 WHERE key=?`)
 			},
 		},
 	}
@@ -110,9 +110,9 @@ func TestProxy_Get(t *testing.T) {
 				},
 			}},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare("SELECT value FROM test WHERE key=?")
-				s.ExpectPrepare("SELECT value FROM fooTable WHERE key=?")
-				s.ExpectQuery("SELECT value FROM test WHERE key=.+").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bar"))
+				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
+				s.ExpectPrepare(`SELECT \(value\) FROM fooTable WHERE key=?`)
+				s.ExpectQuery(`SELECT \(value\) FROM test WHERE key=.+`).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bar"))
 			},
 			args: args{key: "key"},
 			want: &memcached.ItemResponse{Item: &memcached.Item{
@@ -137,8 +137,8 @@ func TestProxy_Get(t *testing.T) {
 				},
 			}},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare("SELECT value FROM test WHERE key=?")
-				s.ExpectPrepare("SELECT value FROM fooTable WHERE key=?")
+				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
+				s.ExpectPrepare(`SELECT \(value\) FROM fooTable WHERE key=?`)
 			},
 			args: args{key: "@@unknown.key"},
 			want: &memcached.ClientErrorResponse{Reason: "no mapping present for a key: '@@unknown.key'"},
@@ -229,12 +229,32 @@ func Test_tableProxy_Get(t *testing.T) {
 			},
 			args: args{key: "foo"},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare("SELECT value FROM test WHERE key=?")
-				s.ExpectQuery("SELECT value FROM test WHERE key=.*").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bar"))
+				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
+				s.ExpectQuery(`SELECT \(value\) FROM test WHERE key=.*`).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bar"))
 			},
 			want: &memcached.ItemResponse{Item: &memcached.Item{
 				Key:   "foo",
 				Value: []byte("bar"),
+			}},
+		},
+		{
+			name: "key found multiple values",
+			fields: fields{
+				mapping: config.Mapping{
+					Name:        "default",
+					KeyColumn:   "key",
+					ValueColumn: "value|value2",
+					Table:       "test",
+				},
+			},
+			args: args{key: "foo"},
+			mock: func(s sqlmock.Sqlmock) {
+				s.ExpectPrepare(`SELECT \(value,value2\) FROM test WHERE key=?`)
+				s.ExpectQuery(`SELECT \(value,value2\) FROM test WHERE key=.*`).WillReturnRows(sqlmock.NewRows([]string{"value", "valu2"}).AddRow("bar", "bar2"))
+			},
+			want: &memcached.ItemResponse{Item: &memcached.Item{
+				Key:   "foo",
+				Value: []byte("bar|bar2"),
 			}},
 		},
 		{
@@ -249,8 +269,8 @@ func Test_tableProxy_Get(t *testing.T) {
 			},
 			args: args{key: "foo"},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare("SELECT value FROM test WHERE key=?")
-				s.ExpectQuery("SELECT value FROM test WHERE key=.*").WillReturnRows(sqlmock.NewRows([]string{"value"}))
+				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
+				s.ExpectQuery(`SELECT \(value\) FROM test WHERE key=.*`).WillReturnRows(sqlmock.NewRows([]string{"value"}))
 			},
 			want: &memcached.ClientErrorResponse{Reason: "sql: no rows in result set"},
 		},
@@ -266,8 +286,8 @@ func Test_tableProxy_Get(t *testing.T) {
 			},
 			args: args{key: "foo"},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare("SELECT value FROM test WHERE key=?")
-				s.ExpectQuery("SELECT value FROM test WHERE key=.*").WillReturnError(errors.New("unknown error"))
+				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
+				s.ExpectQuery(`SELECT \(value\) FROM test WHERE key=.*`).WillReturnError(errors.New("unknown error"))
 			},
 			want: &memcached.ClientErrorResponse{Reason: "unknown error"},
 		},
