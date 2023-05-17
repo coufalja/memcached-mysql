@@ -49,15 +49,21 @@ func New(db *sql.DB, mapping []config.Mapping) *Proxy {
 		tables: make(map[string]*tableProxy),
 	}
 	for _, m := range mapping {
-		stmt, err := db.Prepare(fmt.Sprintf("SELECT %s FROM %s WHERE %s=?", m.ValueColumn, m.Table, m.KeyColumn))
+		tp, err := newTable(db, m)
 		if err != nil {
 			panic(err)
 		}
-		proxy.tables[m.Name] = &tableProxy{
-			query: stmt,
-		}
+		proxy.tables[m.Name] = tp
 	}
 	return proxy
+}
+
+func newTable(db *sql.DB, m config.Mapping) (*tableProxy, error) {
+	stmt, err := db.Prepare(fmt.Sprintf("SELECT %s FROM %s WHERE %s=?", m.ValueColumn, m.Table, m.KeyColumn))
+	if err != nil {
+		return nil, err
+	}
+	return &tableProxy{query: stmt}, nil
 }
 
 type tableProxy struct {
