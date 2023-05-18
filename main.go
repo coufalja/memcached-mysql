@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/coufalja/memcached-mysql/config"
+	"github.com/coufalja/memcached-mysql/memcached"
 	"github.com/coufalja/memcached-mysql/mysql"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/mattrobenolt/go-memcached"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
