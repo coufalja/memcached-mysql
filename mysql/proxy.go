@@ -31,7 +31,7 @@ func (c *Proxy) Get(key string) memcached.MemcachedResponse {
 	if proxy, ok := c.tables[mapping]; ok {
 		return proxy.Get(ckey)
 	}
-	return &memcached.ClientErrorResponse{Reason: fmt.Sprintf("no mapping present for a key: '%s'", key)}
+	return nil
 }
 
 func mappingKey(key string) (string, string, error) {
@@ -86,6 +86,9 @@ func (c *tableProxy) Get(key string) memcached.MemcachedResponse {
 		pointers[i] = &container[i]
 	}
 	if err := row.Scan(pointers...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
 		return &memcached.ClientErrorResponse{Reason: err.Error()}
 	}
 	return &memcached.ItemResponse{Item: &memcached.Item{Key: key, Value: []byte(strings.Join(container, valueSeparator))}}
