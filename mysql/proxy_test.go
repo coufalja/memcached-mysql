@@ -6,7 +6,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/coufalja/memcached-mysql/config"
-	"github.com/mattrobenolt/go-memcached"
+	"github.com/coufalja/memcached-mysql/memcached"
 	"github.com/stretchr/testify/require"
 )
 

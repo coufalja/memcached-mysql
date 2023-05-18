@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/coufalja/memcached-mysql/config"
-	"github.com/mattrobenolt/go-memcached"
+	"github.com/coufalja/memcached-mysql/memcached"
 )
 
 const (
