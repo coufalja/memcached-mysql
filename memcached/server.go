@@ -38,12 +38,12 @@ type StorageCmd struct {
 	Noreply bool
 }
 
-func (s *Server) newConn(rwc net.Conn) (c *conn, err error) {
+func (s *Server) newConn(rwc net.Conn) (c *conn) {
 	c = new(conn)
 	c.server = s
 	c.conn = rwc
 	c.rwc = bufio.NewReadWriter(bufio.NewReaderSize(rwc, 1048576), bufio.NewWriter(rwc))
-	return c, nil
+	return c
 }
 
 // ListenAndServe starts listening and accepting requests to this server.
@@ -66,10 +66,7 @@ func (s *Server) Serve(l net.Listener) error {
 		if e != nil {
 			return e
 		}
-		c, err := s.newConn(rw)
-		if err != nil {
-			continue
-		}
+		c := s.newConn(rw)
 		go c.serve()
 	}
 }
@@ -249,7 +246,7 @@ func parseStorageLine(line []byte) *StorageCmd {
 	return cmd
 }
 
-// Initialize a new memcached Server
+// Initialize a new memcached Server.
 func NewServer(listen string, handler RequestHandler) *Server {
 	return &Server{listen, handler, NewStats()}
 }

@@ -31,7 +31,8 @@ func (i *Item) IsExpired() bool {
 func (i *Item) SetExpires(exptime int64) {
 	if exptime > MAX_EXPTIME {
 		i.Expires = time.Unix(exptime, 0)
-		i.Ttl = int(i.Expires.Sub(time.Now()).Seconds())
+		time.Until(i.Expires)
+		i.Ttl = int(time.Until(i.Expires).Seconds())
 	} else if exptime > 0 {
 		i.Ttl = int(exptime)
 		i.Expires = time.Now().Add(time.Duration(exptime) * time.Second)
@@ -42,7 +43,7 @@ func (i *Item) String() string {
 	return fmt.Sprintf("<Item %s Flags:%d Length:%d Ttl:%d Expires:%s>", i.Key, i.Flags, len(i.Value), i.Ttl, i.Expires)
 }
 
-// NewItem initializes a new Item
+// NewItem initializes a new Item.
 func NewItem() *Item {
 	return &Item{}
 }

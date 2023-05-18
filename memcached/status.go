@@ -20,12 +20,12 @@ const (
 )
 
 var (
-	// ClientError is an error caused by an invalid command from the client
+	// ClientError is an error caused by an invalid command from the client.
 	ClientError = errors.New(StatusClientError)
-	// NotFound is returned when the key was not found
+	// NotFound is returned when the key was not found.
 	NotFound = errors.New(StatusNotFound)
-	// ServerError is an error occurred servicing this request
+	// ServerError is an error occurred servicing this request.
 	ServerError = errors.New(StatusServerError)
-	// Error is a generic error
+	// Error is a generic error.
 	Error = errors.New(StatusError)
 )

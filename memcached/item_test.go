@@ -52,7 +52,7 @@ func TestSetExpiresTypical(t *testing.T) {
 	if !item.Expires.After(time.Now()) {
 		t.Error("Expires should be in the future.")
 	}
-	if item.Expires.Sub(time.Now()) >= TEN_SECONDS || item.Expires.Sub(time.Now()) < time.Duration(9)*time.Second {
+	if time.Until(item.Expires) >= TEN_SECONDS || time.Until(item.Expires) < time.Duration(9)*time.Second {
 		t.Error("Expires should be > 9, and < 10 seconds")
 	}
 	if item.Ttl != 10 {
