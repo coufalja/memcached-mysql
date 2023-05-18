@@ -203,6 +203,12 @@ func (c *conn) handleRequest() error {
 			c.rwc.WriteString(StatusDeleted)
 			c.end()
 		}
+	case 'v':
+		if len(line) != 7 {
+			return Error
+		}
+		c.rwc.WriteString(fmt.Sprintf(StatusVersion, VERSION))
+		c.end()
 	case 'q':
 		if len(line) == 4 {
 			return io.EOF
