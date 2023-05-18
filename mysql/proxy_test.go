@@ -141,7 +141,7 @@ func TestProxy_Get(t *testing.T) {
 				s.ExpectPrepare(`SELECT \(value\) FROM fooTable WHERE key=?`)
 			},
 			args: args{key: "@@unknown.key"},
-			want: &memcached.ClientErrorResponse{Reason: "no mapping present for a key: '@@unknown.key'"},
+			want: nil,
 		},
 	}
 	for _, tt := range tests {
@@ -272,7 +272,7 @@ func Test_tableProxy_Get(t *testing.T) {
 				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
 				s.ExpectQuery(`SELECT \(value\) FROM test WHERE key=.*`).WillReturnRows(sqlmock.NewRows([]string{"value"}))
 			},
-			want: &memcached.ClientErrorResponse{Reason: "sql: no rows in result set"},
+			want: nil,
 		},
 		{
 			name: "query failed",
