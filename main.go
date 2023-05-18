@@ -8,6 +8,7 @@ import (
 	"github.com/coufalja/memcached-mysql/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/mattrobenolt/go-memcached"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -37,10 +38,12 @@ var (
 )
 
 func init() {
+	pflag.String("config", "config.yaml", "path to a config file")
+	pflag.Parse()
+	viper.BindPFlags(pflag.CommandLine)
+
 	viper.AutomaticEnv()
-	viper.SetConfigName("config")
-	viper.AddConfigPath(".")
-	viper.AddConfigPath("config")
+	viper.SetConfigFile(viper.GetString("config"))
 
 	l, err := zap.NewProductionConfig().Build()
 	if err != nil {
