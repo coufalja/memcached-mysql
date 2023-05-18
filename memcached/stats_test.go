@@ -3,6 +3,8 @@ package memcached
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestStaticStat(t *testing.T) {
@@ -25,17 +27,11 @@ func TestCounterStat(t *testing.T) {
 	for i = 0; i < 10; i++ {
 		stat.Increment(1)
 	}
-	time.Sleep(1) // Force the intenal goroutine to catch up with the counts
-	if stat.String() != "10" {
-		t.Error("Should be '10'", stat.String())
-	}
+	require.Eventually(t, func() bool { return stat.String() == "10" }, 10*time.Second, 10*time.Millisecond)
 	for i = 0; i < 10; i++ {
 		stat.Decrement(1)
 	}
-	time.Sleep(1)
-	if stat.String() != "0" {
-		t.Error("Should be '0'", stat.String())
-	}
+	require.Eventually(t, func() bool { return stat.String() == "0" }, 10*time.Second, 10*time.Millisecond)
 	stat.SetCount(100)
 	if stat.String() != "100" {
 		t.Error("Should be '100'", stat.String())
