@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/coufalja/memcached-mysql/config"
 	"github.com/coufalja/memcached-mysql/memcached"
@@ -38,11 +39,13 @@ var (
 )
 
 func init() {
-	pflag.String("config", "config.yaml", "path to a config file")
-	pflag.Parse()
-	viper.BindPFlags(pflag.CommandLine)
+	pflag.String("config", "config.yaml", "Path to a config file.")
 
+	pflag.Parse()
+
+	viper.BindPFlags(pflag.CommandLine)
 	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.SetConfigFile(viper.GetString("config"))
 
 	l, err := zap.NewProductionConfig().Build()
