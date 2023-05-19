@@ -1,5 +1,23 @@
+# Example configuration file.
+
+server:
+  host: 127.0.0.1
+  port: 11211
+
 mysql:
-  connection: mysql:mysql@tcp(127.0.0.1:3306)/mysql
+  password: pwd
+  # User can be substituted with an environment variable, if such variable exists.
+  user: $NAME
+  hostname: hostname
+  port: 3306
+  database: db
+  # maxLifetime is of type time.Duration.
+  connMaxLifetime: 10s
+  maxOpenConns: -1
+  maxIdleConns: -1
+
 mapping:
 - name: default
   table: test
+  keyColumn: key
+  valueColumn: value

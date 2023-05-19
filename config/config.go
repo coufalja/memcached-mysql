@@ -1,15 +1,28 @@
 package config
 
-import "time"
+import (
+	"fmt"
+	"os"
+	"time"
+)
 
 type Server struct {
 	Host string `json:"host"`
 	Port int    `json:"port"`
 }
 
+// mysqlConnectionTmpl is a MySQL connection string template in the form
+// <user>:<password>@tcp(<host>:<port>).
+const mysqlConnectionTmpl = "%s:%s@tcp(%s:%d)"
+
 type MySQL struct {
-	Connection      string        `json:"connection"`
-	ConnMaxLifetime time.Duration `json:"maxLifetime"`
+	Connection      string
+	Password        string        `json:"password"`
+	User            string        `json:"user"`
+	Host            string        `json:"host"`
+	Port            int           `json:"port"`
+	Database        string        `json:"database"`
+	ConnMaxLifetime time.Duration `json:"connMaxLifetime"`
 	MaxOpenConns    int           `json:"maxOpenConns"`
 	MaxIdleConns    int           `json:"maxIdleConns"`
 }
@@ -44,15 +57,21 @@ func (c *Config) EnsureDefault() {
 		c.Server.Port = 11211
 	}
 
-	if c.MySQL.Connection == "" {
-		c.MySQL.Connection = "mysql:mysql@tcp(127.0.0.1:3306)/mysql"
+	c.MySQL.User = os.ExpandEnv(c.MySQL.User)
+
+	c.MySQL.Connection = fmt.Sprintf(mysqlConnectionTmpl, c.MySQL.User, c.MySQL.Password, c.MySQL.Host, c.MySQL.Port)
+	if c.MySQL.Database != "" {
+		c.MySQL.Connection = fmt.Sprintf("%s/%s", c.MySQL.Connection, c.MySQL.Database)
 	}
+
 	if c.MySQL.ConnMaxLifetime == 0 {
 		c.MySQL.ConnMaxLifetime = 3 * time.Minute
 	}
+
 	if c.MySQL.MaxIdleConns == 0 {
 		c.MySQL.MaxIdleConns = -1
 	}
+
 	if c.MySQL.MaxOpenConns == 0 {
 		c.MySQL.MaxOpenConns = -1
 	}
