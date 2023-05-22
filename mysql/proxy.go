@@ -13,10 +13,12 @@ import (
 )
 
 const (
-	mappingPrefix  = "@@"
-	mappingSep     = "."
-	defaultMapping = "default"
-	valueSeparator = "|"
+	mappingPrefix      = "@@"
+	mappingSep         = "."
+	defaultMapping     = "default"
+	valueSeparator     = "|"
+	columnSeparator    = ","
+	tableNameSeparator = "."
 )
 
 type Proxy struct {
@@ -59,9 +61,32 @@ func New(db *sql.DB, mapping []config.Mapping) *Proxy {
 	return proxy
 }
 
+func backtickSlice(elems []string) []string {
+	newElems := make([]string, len(elems))
+
+	for i, elem := range elems {
+		newElems[i] = backtick(elem)
+	}
+
+	return newElems
+}
+
+func backtick(elem string) string {
+	return fmt.Sprintf("`%s`", elem)
+}
+
+func formatSelectQuery(columns []string, table, keyColumn string) string {
+	return fmt.Sprintf(
+		"SELECT %s FROM %s WHERE %s=?",
+		strings.Join(backtickSlice(columns), columnSeparator),                                     // []string{"column1", "column2"} -> "`column1`,`column2`"
+		strings.Join(backtickSlice(strings.Split(table, tableNameSeparator)), tableNameSeparator), // "database.table" ~> "`database`.`table`"
+		backtick(keyColumn),
+	)
+}
+
 func newTable(db *sql.DB, m config.Mapping) (*tableProxy, error) {
 	columns := strings.Split(m.ValueColumn, valueSeparator)
-	stmt, err := db.Prepare(fmt.Sprintf("SELECT (%s) FROM %s WHERE %s=?", strings.Join(columns, ","), m.Table, m.KeyColumn))
+	stmt, err := db.Prepare(formatSelectQuery(columns, m.Table, m.KeyColumn))
 	if err != nil {
 		return nil, err
 	}
