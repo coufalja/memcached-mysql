@@ -27,10 +27,10 @@ func main() {
 	}
 
 	proxy := memcached.NewServer(fmt.Sprintf("%s:%d", conf.Server.Host, conf.Server.Port), mysql.New(db, conf.Mapping))
+	logger.Info("memcached proxy starting")
 	if err := proxy.ListenAndServe(); err != nil {
 		logger.Panic("failed to start server", zap.Error(err))
 	}
-	logger.Info("memcached proxy started")
 }
 
 var (
@@ -43,7 +43,7 @@ func init() {
 
 	pflag.Parse()
 
-	viper.BindPFlags(pflag.CommandLine)
+	_ = viper.BindPFlags(pflag.CommandLine)
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.SetConfigFile(viper.GetString("config"))
