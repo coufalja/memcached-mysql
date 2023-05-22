@@ -38,7 +38,7 @@ func TestNew(t *testing.T) {
 				},
 			},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
+				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
 			},
 		},
 		{
@@ -60,8 +60,8 @@ func TestNew(t *testing.T) {
 				},
 			},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
-				s.ExpectPrepare(`SELECT \(value\) FROM test2 WHERE key=?`)
+				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
+				s.ExpectPrepare("SELECT `value` FROM `test2` WHERE `key`=?")
 			},
 		},
 	}
@@ -110,9 +110,9 @@ func TestProxy_Get(t *testing.T) {
 				},
 			}},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
-				s.ExpectPrepare(`SELECT \(value\) FROM fooTable WHERE key=?`)
-				s.ExpectQuery(`SELECT \(value\) FROM test WHERE key=.+`).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bar"))
+				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
+				s.ExpectPrepare("SELECT `value` FROM `fooTable` WHERE `key`=?")
+				s.ExpectQuery("SELECT `value` FROM `test` WHERE `key`=.+").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bar"))
 			},
 			args: args{key: "key"},
 			want: &memcached.ItemResponse{Item: &memcached.Item{
@@ -137,8 +137,8 @@ func TestProxy_Get(t *testing.T) {
 				},
 			}},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
-				s.ExpectPrepare(`SELECT \(value\) FROM fooTable WHERE key=?`)
+				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
+				s.ExpectPrepare("SELECT `value` FROM `fooTable` WHERE `key`=?")
 			},
 			args: args{key: "@@unknown.key"},
 			want: nil,
@@ -229,8 +229,8 @@ func Test_tableProxy_Get(t *testing.T) {
 			},
 			args: args{key: "foo"},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
-				s.ExpectQuery(`SELECT \(value\) FROM test WHERE key=.*`).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bar"))
+				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
+				s.ExpectQuery("SELECT `value` FROM `test` WHERE `key`=.*").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bar"))
 			},
 			want: &memcached.ItemResponse{Item: &memcached.Item{
 				Key:   "foo",
@@ -249,8 +249,8 @@ func Test_tableProxy_Get(t *testing.T) {
 			},
 			args: args{key: "foo"},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare(`SELECT \(value,value2\) FROM test WHERE key=?`)
-				s.ExpectQuery(`SELECT \(value,value2\) FROM test WHERE key=.*`).WillReturnRows(sqlmock.NewRows([]string{"value", "valu2"}).AddRow("bar", "bar2"))
+				s.ExpectPrepare("SELECT `value`,`value2` FROM `test` WHERE `key`=?")
+				s.ExpectQuery("SELECT `value`,`value2` FROM `test` WHERE `key`=.*").WillReturnRows(sqlmock.NewRows([]string{"value", "valu2"}).AddRow("bar", "bar2"))
 			},
 			want: &memcached.ItemResponse{Item: &memcached.Item{
 				Key:   "foo",
@@ -269,8 +269,8 @@ func Test_tableProxy_Get(t *testing.T) {
 			},
 			args: args{key: "foo"},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
-				s.ExpectQuery(`SELECT \(value\) FROM test WHERE key=.*`).WillReturnRows(sqlmock.NewRows([]string{"value"}))
+				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
+				s.ExpectQuery("SELECT `value` FROM `test` WHERE `key`=.*").WillReturnRows(sqlmock.NewRows([]string{"value"}))
 			},
 			want: nil,
 		},
@@ -286,8 +286,8 @@ func Test_tableProxy_Get(t *testing.T) {
 			},
 			args: args{key: "foo"},
 			mock: func(s sqlmock.Sqlmock) {
-				s.ExpectPrepare(`SELECT \(value\) FROM test WHERE key=?`)
-				s.ExpectQuery(`SELECT \(value\) FROM test WHERE key=.*`).WillReturnError(errors.New("unknown error"))
+				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
+				s.ExpectQuery("SELECT `value` FROM `test` WHERE `key`=.*").WillReturnError(errors.New("unknown error"))
 			},
 			want: &memcached.ClientErrorResponse{Reason: "unknown error"},
 		},
