@@ -31,7 +31,15 @@ func (c *Proxy) Get(key string) memcached.MemcachedResponse {
 		return &memcached.ClientErrorResponse{Reason: err.Error()}
 	}
 	if proxy, ok := c.tables[mapping]; ok {
-		return proxy.Get(ckey)
+		item, err := proxy.Get(ckey)
+		if err != nil {
+			return &memcached.ClientErrorResponse{Reason: err.Error()}
+		}
+		if item == nil {
+			return nil
+		}
+		item.Key = key
+		return &memcached.ItemResponse{Item: item}
 	}
 	return nil
 }
@@ -98,12 +106,12 @@ type tableProxy struct {
 	columns []string
 }
 
-func (c *tableProxy) Get(key string) memcached.MemcachedResponse {
+func (c *tableProxy) Get(key string) (*memcached.Item, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	row := c.query.QueryRowContext(ctx, key)
 	if row.Err() != nil {
-		return &memcached.ClientErrorResponse{Reason: row.Err().Error()}
+		return nil, row.Err()
 	}
 	container := make([]string, len(c.columns))
 	pointers := make([]interface{}, len(c.columns))
@@ -112,9 +120,9 @@ func (c *tableProxy) Get(key string) memcached.MemcachedResponse {
 	}
 	if err := row.Scan(pointers...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil
+			return nil, nil
 		}
-		return &memcached.ClientErrorResponse{Reason: err.Error()}
+		return nil, err
 	}
-	return &memcached.ItemResponse{Item: &memcached.Item{Key: key, Value: []byte(strings.Join(container, valueSeparator))}}
+	return &memcached.Item{Value: []byte(strings.Join(container, valueSeparator))}, nil
 }
