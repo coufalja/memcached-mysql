@@ -94,6 +94,57 @@ func TestProxy_Get(t *testing.T) {
 		want   memcached.MemcachedResponse
 	}{
 		{
+			name: "get key from mapping",
+			fields: fields{mappings: []config.Mapping{
+				{
+					Name:        "default",
+					KeyColumn:   "key",
+					ValueColumn: "value",
+					Table:       "test",
+				},
+				{
+					Name:        "foo",
+					KeyColumn:   "key",
+					ValueColumn: "value",
+					Table:       "fooTable",
+				},
+			}},
+			mock: func(s sqlmock.Sqlmock) {
+				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
+				s.ExpectPrepare("SELECT `value` FROM `fooTable` WHERE `key`=?")
+				s.ExpectQuery("SELECT `value` FROM `fooTable` WHERE `key`=.+").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bar"))
+			},
+			args: args{key: "@@foo.key"},
+			want: &memcached.ItemResponse{Item: &memcached.Item{
+				Key:   "@@foo.key",
+				Value: []byte("bar"),
+			}},
+		},
+		{
+			name: "key not found",
+			fields: fields{mappings: []config.Mapping{
+				{
+					Name:        "default",
+					KeyColumn:   "key",
+					ValueColumn: "value",
+					Table:       "test",
+				},
+				{
+					Name:        "foo",
+					KeyColumn:   "key",
+					ValueColumn: "value",
+					Table:       "fooTable",
+				},
+			}},
+			mock: func(s sqlmock.Sqlmock) {
+				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
+				s.ExpectPrepare("SELECT `value` FROM `fooTable` WHERE `key`=?")
+				s.ExpectQuery("SELECT `value` FROM `fooTable` WHERE `key`=.+").WillReturnRows(sqlmock.NewRows([]string{"value"}))
+			},
+			args: args{key: "@@foo.key"},
+			want: nil,
+		},
+		{
 			name: "raw key uses default mapping",
 			fields: fields{mappings: []config.Mapping{
 				{
@@ -211,11 +262,12 @@ func Test_tableProxy_Get(t *testing.T) {
 		key string
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		mock   func(sqlmock.Sqlmock)
-		want   memcached.MemcachedResponse
+		name    string
+		fields  fields
+		args    args
+		mock    func(sqlmock.Sqlmock)
+		want    *memcached.Item
+		wantErr require.ErrorAssertionFunc
 	}{
 		{
 			name: "key found",
@@ -232,10 +284,10 @@ func Test_tableProxy_Get(t *testing.T) {
 				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
 				s.ExpectQuery("SELECT `value` FROM `test` WHERE `key`=.*").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bar"))
 			},
-			want: &memcached.ItemResponse{Item: &memcached.Item{
-				Key:   "foo",
+			want: &memcached.Item{
 				Value: []byte("bar"),
-			}},
+			},
+			wantErr: require.NoError,
 		},
 		{
 			name: "key found multiple values",
@@ -252,10 +304,10 @@ func Test_tableProxy_Get(t *testing.T) {
 				s.ExpectPrepare("SELECT `value`,`value2` FROM `test` WHERE `key`=?")
 				s.ExpectQuery("SELECT `value`,`value2` FROM `test` WHERE `key`=.*").WillReturnRows(sqlmock.NewRows([]string{"value", "valu2"}).AddRow("bar", "bar2"))
 			},
-			want: &memcached.ItemResponse{Item: &memcached.Item{
-				Key:   "foo",
+			want: &memcached.Item{
 				Value: []byte("bar|bar2"),
-			}},
+			},
+			wantErr: require.NoError,
 		},
 		{
 			name: "key not found",
@@ -272,7 +324,8 @@ func Test_tableProxy_Get(t *testing.T) {
 				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
 				s.ExpectQuery("SELECT `value` FROM `test` WHERE `key`=.*").WillReturnRows(sqlmock.NewRows([]string{"value"}))
 			},
-			want: nil,
+			want:    nil,
+			wantErr: require.NoError,
 		},
 		{
 			name: "query failed",
@@ -289,7 +342,8 @@ func Test_tableProxy_Get(t *testing.T) {
 				s.ExpectPrepare("SELECT `value` FROM `test` WHERE `key`=?")
 				s.ExpectQuery("SELECT `value` FROM `test` WHERE `key`=.*").WillReturnError(errors.New("unknown error"))
 			},
-			want: &memcached.ClientErrorResponse{Reason: "unknown error"},
+			want:    nil,
+			wantErr: require.Error,
 		},
 	}
 	for _, tt := range tests {
@@ -301,7 +355,8 @@ func Test_tableProxy_Get(t *testing.T) {
 			}
 			c, err := newTable(db, tt.fields.mapping)
 			require.NoError(t, err)
-			got := c.Get(tt.args.key)
+			got, err := c.Get(tt.args.key)
+			tt.wantErr(t, err)
 			require.Equal(t, tt.want, got)
 		})
 	}
