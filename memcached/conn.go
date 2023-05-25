@@ -47,6 +47,7 @@ func (c *conn) handleRequest() error {
 	}
 	switch line[0] {
 	case 'g':
+		// "get"
 		key := string(line[4:]) // get
 		if c.server.Getter == nil {
 			return Error
@@ -64,6 +65,8 @@ func (c *conn) handleRequest() error {
 	case 's':
 		switch line[1] {
 		case 'e':
+			// TODO: fix errors. Instead of Error, send SERVER_ERROR with custom message...
+			// "set"
 			if len(line) < 11 {
 				return Error
 			}
@@ -116,6 +119,7 @@ func (c *conn) handleRequest() error {
 				}
 			}
 		case 't':
+			// "stats"
 			if len(line) != 5 {
 				return Error
 			}
@@ -128,6 +132,7 @@ func (c *conn) handleRequest() error {
 			return Error
 		}
 	case 'd':
+		// "delete"
 		if len(line) < 8 {
 			return Error
 		}
@@ -144,12 +149,14 @@ func (c *conn) handleRequest() error {
 			c.end()
 		}
 	case 'v':
+		// "version"
 		if len(line) != 7 {
 			return Error
 		}
 		c.rwc.WriteString(fmt.Sprintf(StatusVersion, VERSION))
 		c.end()
 	case 'q':
+		// "quit"
 		if len(line) == 4 {
 			return io.EOF
 		}

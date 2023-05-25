@@ -3,6 +3,7 @@ package memcached
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -11,23 +12,48 @@ import (
 )
 
 type testHandler struct {
-	value string
+	kvs map[string]string
 }
 
 func (h *testHandler) Get(key string) MemcachedResponse {
+	item := &Item{
+		Key: key,
+	}
+
+	if value, ok := h.kvs[key]; ok {
+		item.Value = []byte(value)
+	}
+
 	return &ItemResponse{
-		Item: &Item{
-			Key:   key,
-			Value: []byte(h.value),
-		},
+		Item: item,
 	}
 }
 
-func prepareConnection(value, fullCmd string) *conn {
+func (h *testHandler) Set(item *Item) MemcachedResponse {
+	return nil
+}
+
+func (h *testHandler) Delete(key string) MemcachedResponse {
+	if _, ok := h.kvs[key]; !ok {
+		// To denote that item was not deleted since it is not present,
+		// empty &ItemResponse should be returned.
+		return &ItemResponse{}
+	}
+
+	return nil
+}
+
+func prepareConnection(fullCmd string, kvs map[string]string) *conn {
+	handler := &testHandler{
+		kvs: kvs,
+	}
+
 	return &conn{
 		server: &Server{
-			Getter: &testHandler{value: value},
-			Stats:  NewStats(),
+			Getter:  handler,
+			Deleter: handler,
+			Setter:  handler,
+			Stats:   NewStats(),
 		},
 		rwc: &bufio.ReadWriter{
 			Reader: bufio.NewReader(strings.NewReader(fullCmd)),
@@ -36,8 +62,6 @@ func prepareConnection(value, fullCmd string) *conn {
 }
 
 func TestHandleRequest_Retrieval(t *testing.T) {
-	const value = "return_value"
-
 	tt := []struct {
 		name    string
 		conn    *conn
@@ -46,29 +70,29 @@ func TestHandleRequest_Retrieval(t *testing.T) {
 	}{
 		{
 			name:    "EOF",
-			conn:    prepareConnection(value, ""),
+			conn:    prepareConnection("", nil),
 			wantErr: io.EOF,
 		},
 		{
 			name:    "invalid command (command too short)",
-			conn:    prepareConnection(value, "ab"),
+			conn:    prepareConnection("ab", nil),
 			wantErr: Error,
 		},
 		{
 			name: "valid GET command (get)",
-			conn: prepareConnection(value, "get KEY"),
+			conn: prepareConnection("get KEY", nil),
 		},
 		{
 			name: "valid GET command (gat)",
-			conn: prepareConnection(value, "gat KEY"),
+			conn: prepareConnection("gat KEY", nil),
 		},
 		{
 			name: "valid GET command (gets)",
-			conn: prepareConnection(value, "gets KEY"),
+			conn: prepareConnection("gets KEY", nil),
 		},
 		{
 			name: "valid GET command (gats)",
-			conn: prepareConnection(value, "gats KEY"),
+			conn: prepareConnection("gats KEY", nil),
 		},
 		// TODO(jsfpdn): This test case should fail, since "gits" is not a valid command.
 		//		{
@@ -88,6 +112,7 @@ func TestHandleRequest_Retrieval(t *testing.T) {
 			b := bytes.Buffer{}
 			tc.conn.rwc.Writer = bufio.NewWriter(&b)
 			err := tc.conn.handleRequest()
+
 			if tc.wantErr != nil {
 				require.Error(t, err)
 			} else {
@@ -101,4 +126,128 @@ func TestHandleRequest_Retrieval(t *testing.T) {
 	}
 }
 
-func TestHandleRequest_Storage(t *testing.T) {}
+func TestHandleRequest_Delete(t *testing.T) {
+	tt := []struct {
+		name    string
+		conn    *conn
+		wantErr error
+		wantRes string
+	}{
+		// TODO(jsfpdn): Return error when encountering such command.
+		// 		{
+		// 			name:    "invalid DELETE command",
+		//			conn:    prepareConnection(value, "dehehe key", nil),
+		//			wantErr: Error,
+		//		},
+		{
+			name:    "valid DELETE command, key exists",
+			conn:    prepareConnection("delete key", map[string]string{"key": "value"}),
+			wantRes: StatusDeleted,
+		},
+		{
+			name:    "valid DELETE command, key does not exist",
+			conn:    prepareConnection("delete key", nil),
+			wantRes: StatusNotFound,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			b := bytes.Buffer{}
+			tc.conn.rwc.Writer = bufio.NewWriter(&b)
+			err := tc.conn.handleRequest()
+
+			if tc.wantErr != nil {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.wantRes, b.String())
+			}
+		})
+	}
+}
+
+func setCommand(key, value string) string {
+	return fmt.Sprintf("set %s 0 0 %d\n%s\r\n", key, len(value), value)
+}
+
+func TestHandleRequest_Storage(t *testing.T) {
+	tt := []struct {
+		name    string
+		conn    *conn
+		wantErr error
+		wantRes string
+	}{
+		// TODO(jsfpdn): Return error when encountering such command.
+		// 		{
+		// 			name:    "invalid SET command",
+		//			conn:    prepareConnection(value, "sed key value", nil),
+		//			wantErr: Error,
+		//		},
+
+		// TODO(jsfpdn): Fix panic when inccorect number of fields is supplied.
+		// {
+		//			name:    "valid SET command, incorrect number of fields",
+		//			conn:    prepareConnection("set key 0 1000\nvalue", nil),
+		//			wantErr: Error,
+		//		},
+		{
+			name:    "valid SET command",
+			conn:    prepareConnection(setCommand("key", "value"), nil),
+			wantRes: StatusStored,
+		},
+		{
+			name:    "valid SET command, invalid payload size",
+			conn:    prepareConnection("set key 0 0 1000\nvalue\r\n", nil),
+			wantErr: Error,
+		},
+		{
+			name:    "valid SET command, missing suffix",
+			conn:    prepareConnection("set key 0 0 1000\nvalue", nil),
+			wantErr: Error,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			b := bytes.Buffer{}
+			tc.conn.rwc.Writer = bufio.NewWriter(&b)
+			err := tc.conn.handleRequest()
+
+			if tc.wantErr != nil {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.NotEmpty(t, b.Bytes())
+				require.Equal(t, tc.wantRes, b.String())
+			}
+		})
+	}
+}
+
+func TestHandleRequest_Quit(t *testing.T) {
+	conn := prepareConnection("quit", nil)
+	b := bytes.Buffer{}
+	conn.rwc.Writer = bufio.NewWriter(&b)
+
+	require.Error(t, io.EOF, conn.handleRequest())
+	require.Equal(t, b.String(), "")
+}
+
+func TestHandleRequest_Version(t *testing.T) {
+	conn := prepareConnection("version", nil)
+	b := bytes.Buffer{}
+	conn.rwc.Writer = bufio.NewWriter(&b)
+
+	require.NoError(t, conn.handleRequest())
+	require.Equal(t, b.String(), fmt.Sprintf(StatusVersion, VERSION))
+}
+
+func TestHandleRequest_Stats(t *testing.T) {
+	conn := prepareConnection("stats", nil)
+	b := bytes.Buffer{}
+	conn.rwc.Writer = bufio.NewWriter(&b)
+
+	require.NoError(t, conn.handleRequest())
+	require.NotEmpty(t, b.String())
+}
