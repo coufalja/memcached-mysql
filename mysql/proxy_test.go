@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -302,10 +303,30 @@ func Test_tableProxy_Get(t *testing.T) {
 			args: args{key: "foo"},
 			mock: func(s sqlmock.Sqlmock) {
 				s.ExpectPrepare("SELECT `value`,`value2` FROM `test` WHERE `key`=?")
-				s.ExpectQuery("SELECT `value`,`value2` FROM `test` WHERE `key`=.*").WillReturnRows(sqlmock.NewRows([]string{"value", "valu2"}).AddRow("bar", "bar2"))
+				s.ExpectQuery("SELECT `value`,`value2` FROM `test` WHERE `key`=.*").WillReturnRows(sqlmock.NewRows([]string{"value", "value2"}).AddRow("bar", "bar2"))
 			},
 			want: &memcached.Item{
 				Value: []byte("bar|bar2"),
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "key found multiple values with NULL",
+			fields: fields{
+				mapping: config.Mapping{
+					Name:        "default",
+					KeyColumn:   "key",
+					ValueColumn: "value|value2",
+					Table:       "test",
+				},
+			},
+			args: args{key: "foo"},
+			mock: func(s sqlmock.Sqlmock) {
+				s.ExpectPrepare("SELECT `value`,`value2` FROM `test` WHERE `key`=?")
+				s.ExpectQuery("SELECT `value`,`value2` FROM `test` WHERE `key`=.*").WillReturnRows(sqlmock.NewRows([]string{"value", "value2"}).AddRow("bar", sql.NullString{}))
+			},
+			want: &memcached.Item{
+				Value: []byte("bar|"),
 			},
 			wantErr: require.NoError,
 		},
