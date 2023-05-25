@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 )
 
 const VERSION = "0.0.0"
@@ -104,7 +105,12 @@ func (c *conn) handleRequest() error {
 	}
 	switch line[0] {
 	case 'g':
-		key := string(line[4:]) // get
+		f := strings.Fields(string(line))
+		if len(f) != 2 {
+			return Error
+		}
+		key := f[1]
+
 		getter, ok := c.server.Handler.(Getter)
 		if !ok {
 			return Error
