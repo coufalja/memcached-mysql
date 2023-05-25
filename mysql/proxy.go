@@ -113,7 +113,7 @@ func (c *tableProxy) Get(key string) (*memcached.Item, error) {
 	if row.Err() != nil {
 		return nil, row.Err()
 	}
-	container := make([]string, len(c.columns))
+	container := make([]sql.NullString, len(c.columns))
 	pointers := make([]interface{}, len(c.columns))
 	for i := range pointers {
 		pointers[i] = &container[i]
@@ -124,5 +124,11 @@ func (c *tableProxy) Get(key string) (*memcached.Item, error) {
 		}
 		return nil, err
 	}
-	return &memcached.Item{Value: []byte(strings.Join(container, valueSeparator))}, nil
+	values := make([]string, len(c.columns))
+	for i, c := range container {
+		if c.Valid {
+			values[i] = c.String
+		}
+	}
+	return &memcached.Item{Value: []byte(strings.Join(values, valueSeparator))}, nil
 }
