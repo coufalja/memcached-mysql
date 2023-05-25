@@ -250,7 +250,10 @@ func parseStorageLine(line []byte) *StorageCmd {
 	return cmd
 }
 
-// Initialize a new memcached Server.
+// NewServer initialize a new memcached Server.
 func NewServer(listen string, handler RequestHandler) *Server {
-	return &Server{listen, handler.(Getter), handler.(Setter), handler.(Deleter), NewStats()}
+	getter, _ := handler.(Getter)
+	setter, _ := handler.(Setter)
+	deleter, _ := handler.(Deleter)
+	return &Server{listen, getter, setter, deleter, NewStats()}
 }
