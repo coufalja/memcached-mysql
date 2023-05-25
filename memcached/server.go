@@ -27,7 +27,9 @@ type conn struct {
 
 type Server struct {
 	Addr    string
-	Handler RequestHandler
+	Getter  Getter
+	Setter  Setter
+	Deleter Deleter
 	Stats   Stats
 }
 
@@ -74,11 +76,11 @@ func (s *Server) Serve(l net.Listener) error {
 
 func (c *conn) serve() {
 	defer func() {
-		c.server.Stats["curr_connections"].(*CounterStat).Decrement(1)
+		c.server.Stats.CurrConnections.Decrement(1)
 		c.Close()
 	}()
-	c.server.Stats["total_connections"].(*CounterStat).Increment(1)
-	c.server.Stats["curr_connections"].(*CounterStat).Increment(1)
+	c.server.Stats.TotalConnections.Increment(1)
+	c.server.Stats.CurrConnections.Increment(1)
 	for {
 		err := c.handleRequest()
 		if err != nil {
@@ -111,17 +113,16 @@ func (c *conn) handleRequest() error {
 		}
 		key := f[1]
 
-		getter, ok := c.server.Handler.(Getter)
-		if !ok {
+		if c.server.Getter == nil {
 			return Error
 		}
-		c.server.Stats["cmd_get"].(*CounterStat).Increment(1)
-		response := getter.Get(key)
+		c.server.Stats.CMDGet.Increment(1)
+		response := c.server.Getter.Get(key)
 		if response != nil {
-			c.server.Stats["get_hits"].(*CounterStat).Increment(1)
+			c.server.Stats.GetHits.Increment(1)
 			response.WriteResponse(c.rwc)
 		} else {
-			c.server.Stats["get_misses"].(*CounterStat).Increment(1)
+			c.server.Stats.GetMisses.Increment(1)
 		}
 		c.rwc.WriteString(StatusEnd)
 		c.end()
@@ -131,8 +132,7 @@ func (c *conn) handleRequest() error {
 			if len(line) < 11 {
 				return Error
 			}
-			setter, ok := c.server.Handler.(Setter)
-			if !ok {
+			if c.server.Setter == nil {
 				return Error
 			}
 			item := &Item{}
@@ -167,11 +167,11 @@ func (c *conn) handleRequest() error {
 			item.Value = make([]byte, len(value)-2)
 			copy(item.Value, value)
 
-			c.server.Stats["cmd_set"].(*CounterStat).Increment(1)
+			c.server.Stats.CMDSet.Increment(1)
 			if cmd.Noreply {
-				go setter.Set(item)
+				go c.server.Setter.Set(item)
 			} else {
-				response := setter.Set(item)
+				response := c.server.Setter.Set(item)
 				if response != nil {
 					response.WriteResponse(c.rwc)
 					c.end()
@@ -184,7 +184,7 @@ func (c *conn) handleRequest() error {
 			if len(line) != 5 {
 				return Error
 			}
-			for key, value := range c.server.Stats {
+			for key, value := range c.server.Stats.Snapshot() {
 				fmt.Fprintf(c.rwc, StatusStat, key, value)
 			}
 			c.rwc.WriteString(StatusEnd)
@@ -197,11 +197,10 @@ func (c *conn) handleRequest() error {
 			return Error
 		}
 		key := string(line[7:]) // delete
-		deleter, ok := c.server.Handler.(Deleter)
-		if !ok {
+		if c.server.Deleter == nil {
 			return Error
 		}
-		err := deleter.Delete(key)
+		err := c.server.Deleter.Delete(key)
 		if err != nil {
 			c.rwc.WriteString(StatusNotFound)
 			c.end()
@@ -239,13 +238,6 @@ func (c *conn) Read(p []byte) (n int, err error) {
 	return io.ReadFull(c.rwc, p)
 }
 
-func ListenAndServe(addr string) error {
-	s := &Server{
-		Addr: addr,
-	}
-	return s.ListenAndServe()
-}
-
 func parseStorageLine(line []byte) *StorageCmd {
 	pieces := bytes.Fields(line[4:]) // Skip the actual "set "
 	cmd := &StorageCmd{}
@@ -260,5 +252,5 @@ func parseStorageLine(line []byte) *StorageCmd {
 
 // Initialize a new memcached Server.
 func NewServer(listen string, handler RequestHandler) *Server {
-	return &Server{listen, handler, NewStats()}
+	return &Server{listen, handler.(Getter), handler.(Setter), handler.(Deleter), NewStats()}
 }

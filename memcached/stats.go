@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-type Stats map[string]fmt.Stringer
-
 type StaticStat struct {
 	Value string
 }
@@ -87,22 +85,60 @@ const (
 	SystemTime
 )
 
+type Stats struct {
+	PID              *StaticStat
+	Uptime           *TimerStat
+	Time             *FuncStat
+	Version          *StaticStat
+	Golang           *StaticStat
+	Goroutines       *FuncStat
+	RUsageUser       *FuncStat
+	RUsageSystem     *FuncStat
+	CMDGet           *CounterStat
+	CMDSet           *CounterStat
+	GetHits          *CounterStat
+	GetMisses        *CounterStat
+	CurrConnections  *CounterStat
+	TotalConnections *CounterStat
+	Evictions        *CounterStat
+}
+
+func (s Stats) Snapshot() map[string]string {
+	m := make(map[string]string)
+	m["pid"] = s.PID.String()
+	m["uptime"] = s.Uptime.String()
+	m["time"] = s.Time.String()
+	m["version"] = s.Version.String()
+	m["golang"] = s.Golang.String()
+	m["goroutines"] = s.Goroutines.String()
+	m["rusage_user"] = s.RUsageUser.String()
+	m["rusage_system"] = s.RUsageSystem.String()
+	m["cmd_get"] = s.CMDGet.String()
+	m["cmd_set"] = s.CMDSet.String()
+	m["get_hits"] = s.GetHits.String()
+	m["get_misses"] = s.GetMisses.String()
+	m["curr_connections"] = s.CurrConnections.String()
+	m["total_connections"] = s.TotalConnections.String()
+	m["evictions"] = s.Evictions.String()
+	return m
+}
+
 func NewStats() Stats {
-	s := make(Stats)
-	s["pid"] = &StaticStat{strconv.Itoa(os.Getpid())}
-	s["uptime"] = NewTimerStat()
-	s["time"] = &FuncStat{func() string { return strconv.Itoa(int(time.Now().Unix())) }}
-	s["version"] = &StaticStat{VERSION}
-	s["golang"] = &StaticStat{runtime.Version()}
-	s["goroutines"] = &FuncStat{func() string { return strconv.Itoa(runtime.NumGoroutine()) }}
-	s["rusage_user"] = &FuncStat{func() string { return fmt.Sprintf("%f", getRusage(UserTime)) }}
-	s["rusage_system"] = &FuncStat{func() string { return fmt.Sprintf("%f", getRusage(SystemTime)) }}
-	s["cmd_get"] = NewCounterStat()
-	s["cmd_set"] = NewCounterStat()
-	s["get_hits"] = NewCounterStat()
-	s["get_misses"] = NewCounterStat()
-	s["curr_connections"] = NewCounterStat()
-	s["total_connections"] = NewCounterStat()
-	s["evictions"] = NewCounterStat()
+	s := Stats{}
+	s.PID = &StaticStat{strconv.Itoa(os.Getpid())}
+	s.Uptime = NewTimerStat()
+	s.Time = &FuncStat{func() string { return strconv.Itoa(int(time.Now().Unix())) }}
+	s.Version = &StaticStat{VERSION}
+	s.Golang = &StaticStat{runtime.Version()}
+	s.Goroutines = &FuncStat{func() string { return strconv.Itoa(runtime.NumGoroutine()) }}
+	s.RUsageUser = &FuncStat{func() string { return fmt.Sprintf("%f", getRusage(UserTime)) }}
+	s.RUsageSystem = &FuncStat{func() string { return fmt.Sprintf("%f", getRusage(SystemTime)) }}
+	s.CMDGet = NewCounterStat()
+	s.CMDSet = NewCounterStat()
+	s.GetHits = NewCounterStat()
+	s.GetMisses = NewCounterStat()
+	s.CurrConnections = NewCounterStat()
+	s.TotalConnections = NewCounterStat()
+	s.Evictions = NewCounterStat()
 	return s
 }
