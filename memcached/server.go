@@ -105,11 +105,11 @@ func (c *conn) handleRequest() error {
 	}
 	switch line[0] {
 	case 'g':
-		_, key, found := strings.Cut(strings.TrimSpace(string(line)), " ")
-		if !found {
+		f := strings.Fields(string(line))
+		if len(f) != 2 {
 			return Error
 		}
-		key = strings.TrimSpace(key)
+		key := f[1]
 
 		getter, ok := c.server.Handler.(Getter)
 		if !ok {
