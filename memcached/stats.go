@@ -5,17 +5,9 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"sync"
+	"sync/atomic"
 	"time"
 )
-
-type StaticStat struct {
-	Value string
-}
-
-func (s *StaticStat) String() string {
-	return s.Value
-}
 
 type TimerStat struct {
 	Start int64
@@ -37,47 +29,6 @@ func (f *FuncStat) String() string {
 	return f.Callable()
 }
 
-type CounterStat struct {
-	Count        int
-	calculations chan int
-	mutex        sync.Mutex
-}
-
-func (c *CounterStat) Increment(num int) {
-	c.calculations <- num
-}
-
-func (c *CounterStat) SetCount(num int) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.Count = num
-}
-
-func (c *CounterStat) Decrement(num int) {
-	c.calculations <- -num
-}
-
-func (c *CounterStat) String() string {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	return strconv.Itoa(c.Count)
-}
-
-func (c *CounterStat) work() {
-	for num := range c.calculations {
-		c.mutex.Lock()
-		c.Count = c.Count + num
-		c.mutex.Unlock()
-	}
-}
-
-func NewCounterStat() *CounterStat {
-	c := &CounterStat{}
-	c.calculations = make(chan int, 100)
-	go c.work()
-	return c
-}
-
 type usageType int
 
 const (
@@ -86,59 +37,64 @@ const (
 )
 
 type Stats struct {
-	PID              *StaticStat
+	PID              string
 	Uptime           *TimerStat
 	Time             *FuncStat
-	Version          *StaticStat
-	Golang           *StaticStat
+	Version          string
+	Golang           string
 	Goroutines       *FuncStat
 	RUsageUser       *FuncStat
 	RUsageSystem     *FuncStat
-	CMDGet           *CounterStat
-	CMDSet           *CounterStat
-	GetHits          *CounterStat
-	GetMisses        *CounterStat
-	CurrConnections  *CounterStat
-	TotalConnections *CounterStat
-	Evictions        *CounterStat
+	CMDGet           *atomic.Int64
+	CMDSet           *atomic.Int64
+	GetHits          *atomic.Int64
+	GetMisses        *atomic.Int64
+	CurrConnections  *atomic.Int64
+	TotalConnections *atomic.Int64
+	Evictions        *atomic.Int64
 }
 
 func (s Stats) Snapshot() map[string]string {
 	m := make(map[string]string)
-	m["pid"] = s.PID.String()
+	m["pid"] = s.PID
 	m["uptime"] = s.Uptime.String()
 	m["time"] = s.Time.String()
-	m["version"] = s.Version.String()
-	m["golang"] = s.Golang.String()
+	m["version"] = s.Version
+	m["golang"] = s.Golang
 	m["goroutines"] = s.Goroutines.String()
 	m["rusage_user"] = s.RUsageUser.String()
 	m["rusage_system"] = s.RUsageSystem.String()
-	m["cmd_get"] = s.CMDGet.String()
-	m["cmd_set"] = s.CMDSet.String()
-	m["get_hits"] = s.GetHits.String()
-	m["get_misses"] = s.GetMisses.String()
-	m["curr_connections"] = s.CurrConnections.String()
-	m["total_connections"] = s.TotalConnections.String()
-	m["evictions"] = s.Evictions.String()
+	m["cmd_get"] = atomicToString(s.CMDGet)
+	m["cmd_set"] = atomicToString(s.CMDSet)
+	m["get_hits"] = atomicToString(s.GetHits)
+	m["get_misses"] = atomicToString(s.GetMisses)
+	m["curr_connections"] = atomicToString(s.CurrConnections)
+	m["total_connections"] = atomicToString(s.TotalConnections)
+	m["evictions"] = atomicToString(s.Evictions)
 	return m
+}
+
+func atomicToString(a *atomic.Int64) string {
+	return strconv.Itoa(int(a.Load()))
 }
 
 func NewStats() Stats {
 	s := Stats{}
-	s.PID = &StaticStat{strconv.Itoa(os.Getpid())}
+	s.PID = strconv.Itoa(os.Getpid())
 	s.Uptime = NewTimerStat()
 	s.Time = &FuncStat{func() string { return strconv.Itoa(int(time.Now().Unix())) }}
-	s.Version = &StaticStat{VERSION}
-	s.Golang = &StaticStat{runtime.Version()}
+	s.Version = VERSION
+	s.Golang = runtime.Version()
 	s.Goroutines = &FuncStat{func() string { return strconv.Itoa(runtime.NumGoroutine()) }}
 	s.RUsageUser = &FuncStat{func() string { return fmt.Sprintf("%f", getRusage(UserTime)) }}
 	s.RUsageSystem = &FuncStat{func() string { return fmt.Sprintf("%f", getRusage(SystemTime)) }}
-	s.CMDGet = NewCounterStat()
-	s.CMDSet = NewCounterStat()
-	s.GetHits = NewCounterStat()
-	s.GetMisses = NewCounterStat()
-	s.CurrConnections = NewCounterStat()
-	s.TotalConnections = NewCounterStat()
-	s.Evictions = NewCounterStat()
+	s.CMDGet = &atomic.Int64{}
+	s.CMDSet = &atomic.Int64{}
+	s.GetHits = &atomic.Int64{}
+	s.GetMisses = &atomic.Int64{}
+	s.CurrConnections = &atomic.Int64{}
+	s.TotalConnections = &atomic.Int64{}
+	s.Evictions = &atomic.Int64{}
+
 	return s
 }
