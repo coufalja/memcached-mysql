@@ -72,10 +72,10 @@ func ListenAndServe(addr string) error {
 }
 
 func parseStorageLine(line []byte) *StorageCmd {
-	pieces := bytes.Fields(line[4:]) // Skip the actual "set "
+	pieces := bytes.Fields(line) // Skip the actual "set "
 	cmd := &StorageCmd{}
 	// lol, no error handling here
-    // TODO(jsfpdn): error handling.
+	// TODO(jsfpdn): error handling.
 	cmd.Key = string(pieces[0])
 	cmd.Flags, _ = strconv.Atoi(string(pieces[1]))
 	cmd.Exptime, _ = strconv.ParseInt(string(pieces[2]), 10, 64)

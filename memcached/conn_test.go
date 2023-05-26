@@ -251,3 +251,69 @@ func TestHandleRequest_Stats(t *testing.T) {
 	require.NoError(t, conn.handleRequest())
 	require.NotEmpty(t, b.String())
 }
+
+func TestParseCommand(t *testing.T) {
+	tt := []struct {
+		name     string
+		input    []byte
+		wantCmd  CommandType
+		wantRest []byte
+	}{
+		{
+			name:     "command too short - invalid command",
+			input:    []byte("ab"),
+			wantCmd:  UnknownCmd,
+			wantRest: []byte("ab"),
+		},
+		{
+			name:     "only get",
+			input:    []byte("get"),
+			wantCmd:  GetCmd,
+			wantRest: []byte(""),
+		},
+		{
+			name:     "get with trailing whitespace",
+			input:    []byte("get  "),
+			wantCmd:  GetCmd,
+			wantRest: []byte("  "),
+		},
+		{
+			name:     "get with key supplied",
+			input:    []byte("get key"),
+			wantCmd:  GetCmd,
+			wantRest: []byte(" key"),
+		},
+		{
+			name:     "gats with key supplied",
+			input:    []byte("gats key"),
+			wantCmd:  GatCmd,
+			wantRest: []byte(" key"),
+		},
+		{
+			name:     "version",
+			input:    []byte("version"),
+			wantCmd:  VersionCmd,
+			wantRest: []byte(""),
+		},
+		{
+			name:     "quit",
+			input:    []byte("quit"),
+			wantCmd:  QuitCmd,
+			wantRest: []byte(""),
+		},
+		{
+			name:     "set with flags",
+			input:    []byte("set key 0 0 1\nvalue\r\n"),
+			wantCmd:  SetCmd,
+			wantRest: []byte(" key 0 0 1\nvalue\r\n"),
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			gotCmd, gotRest := parseCommand(tc.input)
+			require.Equal(t, tc.wantCmd, gotCmd)
+			require.Equal(t, tc.wantRest, gotRest)
+		})
+	}
+}
