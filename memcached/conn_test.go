@@ -79,6 +79,11 @@ func TestHandleRequest_Retrieval(t *testing.T) {
 			wantErr: Error,
 		},
 		{
+			name:    "invalid gits command",
+			conn:    prepareConnection("gatis KEY", nil),
+			wantErr: Error,
+		},
+		{
 			name: "valid GET command (get)",
 			conn: prepareConnection("get KEY", nil),
 		},
@@ -94,17 +99,6 @@ func TestHandleRequest_Retrieval(t *testing.T) {
 			name: "valid GET command (gats)",
 			conn: prepareConnection("gats KEY", nil),
 		},
-		// TODO(jsfpdn): This test case should fail, since "gits" is not a valid command.
-		//		{
-		//			name: "valid GET command (gits)",
-		//			conn: &conn{
-		//				server: testServer(),
-		//				rwc: &bufio.ReadWriter{
-		//					Reader: bufio.NewReader((strings.NewReader("gats KEY"))),
-		//				},
-		//			},
-		//			wantErr: Error,
-		//		},
 	}
 
 	for _, tc := range tt {
@@ -133,12 +127,11 @@ func TestHandleRequest_Delete(t *testing.T) {
 		wantErr error
 		wantRes string
 	}{
-		// TODO(jsfpdn): Return error when encountering such command.
-		// 		{
-		// 			name:    "invalid DELETE command",
-		//			conn:    prepareConnection(value, "dehehe key", nil),
-		//			wantErr: Error,
-		//		},
+		{
+			name:    "invalid DELETE command",
+			conn:    prepareConnection("dehehe key", nil),
+			wantErr: Error,
+		},
 		{
 			name:    "valid DELETE command, key exists",
 			conn:    prepareConnection("delete key", map[string]string{"key": "value"}),
@@ -168,7 +161,7 @@ func TestHandleRequest_Delete(t *testing.T) {
 }
 
 func setCommand(key, value string) string {
-	return fmt.Sprintf("set %s 0 0 %d\n%s\r\n", key, len(value), value)
+	return fmt.Sprintf("set %s 1 1 %d\r\n%s\r\n", key, len(value), value)
 }
 
 func TestHandleRequest_Storage(t *testing.T) {
@@ -178,33 +171,25 @@ func TestHandleRequest_Storage(t *testing.T) {
 		wantErr error
 		wantRes string
 	}{
-		// TODO(jsfpdn): Return error when encountering such command.
-		// 		{
-		// 			name:    "invalid SET command",
-		//			conn:    prepareConnection(value, "sed key value", nil),
-		//			wantErr: Error,
-		//		},
-
-		// TODO(jsfpdn): Fix panic when inccorect number of fields is supplied.
-		// {
-		//			name:    "valid SET command, incorrect number of fields",
-		//			conn:    prepareConnection("set key 0 1000\nvalue", nil),
-		//			wantErr: Error,
-		//		},
 		{
 			name:    "valid SET command",
 			conn:    prepareConnection(setCommand("key", "value"), nil),
 			wantRes: StatusStored,
 		},
 		{
-			name:    "valid SET command, invalid payload size",
-			conn:    prepareConnection("set key 0 0 1000\nvalue\r\n", nil),
-			wantErr: Error,
+			name:    "invalid payload size (too large)",
+			conn:    prepareConnection("set key 0 0 1000\r\nvalue\r\n", nil),
+			wantErr: ClientError,
 		},
 		{
-			name:    "valid SET command, missing suffix",
-			conn:    prepareConnection("set key 0 0 1000\nvalue", nil),
-			wantErr: Error,
+			name:    "invalid payload size (too small)",
+			conn:    prepareConnection("set key 0 0 1\r\nvalue\r\n", nil),
+			wantErr: ClientError,
+		},
+		{
+			name:    "missing crlf",
+			conn:    prepareConnection("set key 0 0 5\r\nvalue", nil),
+			wantErr: ClientError,
 		},
 	}
 
@@ -303,9 +288,9 @@ func TestParseCommand(t *testing.T) {
 		},
 		{
 			name:     "set with flags",
-			input:    []byte("set key 0 0 1\nvalue\r\n"),
+			input:    []byte("set key 0 0 1\r\nvalue\r\n"),
 			wantCmd:  SetCmd,
-			wantRest: []byte(" key 0 0 1\nvalue\r\n"),
+			wantRest: []byte(" key 0 0 1\r\nvalue\r\n"),
 		},
 	}
 
@@ -314,6 +299,69 @@ func TestParseCommand(t *testing.T) {
 			gotCmd, gotRest := parseCommand(tc.input)
 			require.Equal(t, tc.wantCmd, gotCmd)
 			require.Equal(t, tc.wantRest, gotRest)
+		})
+	}
+}
+
+func TestParseSetArgs(t *testing.T) {
+	tt := []struct {
+		name     string
+		input    []byte
+		wantArgs setArgs
+		wantErr  error
+	}{
+		{
+			name:    "nil input",
+			input:   nil,
+			wantErr: ClientError,
+		},
+		{
+			name:    "incorrect flags",
+			input:   []byte("key bad 1 10"),
+			wantErr: ClientError,
+		},
+		{
+			name:    "incorrect exptime",
+			input:   []byte("key 1 bad 10"),
+			wantErr: ClientError,
+		},
+		{
+			name:    "incorrect data block size",
+			input:   []byte("key 1 1 bad"),
+			wantErr: ClientError,
+		},
+		{
+			name:  "correct arguments",
+			input: []byte("key 1 1 10"),
+			wantArgs: setArgs{
+				key:     []byte("key"),
+				flags:   1,
+				exptime: 1,
+				bytes:   10,
+			},
+		},
+		{
+			name:  "correct arguments with noreply",
+			input: []byte("key 1 1 10 noreply"),
+			wantArgs: setArgs{
+				key:     []byte("key"),
+				flags:   1,
+				exptime: 1,
+				bytes:   10,
+				noReply: true,
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			gotArgs, gotErr := parseSetArgs(tc.input)
+			require.Equal(t, tc.wantArgs, gotArgs)
+			if tc.wantErr != nil {
+				require.Error(t, gotErr)
+			} else {
+				require.NoError(t, gotErr)
+			}
 		})
 	}
 }

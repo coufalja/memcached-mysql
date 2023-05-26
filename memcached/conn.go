@@ -3,9 +3,11 @@ package memcached
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 )
 
 type conn struct {
@@ -41,7 +43,7 @@ type CommandType int
 
 const (
 	GetCmd CommandType = iota
-	// Gat is get and touch
+	// Gat is get and touch, refreshing the expiration time.
 	GatCmd
 	SetCmd
 	StatsCmd
@@ -102,19 +104,14 @@ func (c *conn) handleRequest() error {
 		key := string(bytes.TrimSpace(line))
 		return c.get(key)
 	case SetCmd:
-		// TODO: fix errors. Instead of Error, send SERVER_ERROR with custom message...
-		return c.set(bytes.Trim(rest, " "))
+		return c.set(bytes.TrimLeft(rest, " "))
 	case StatsCmd:
-		for key, value := range c.server.Stats.Snapshot() {
-			fmt.Fprintf(c.rwc, StatusStat, key, value)
-		}
-		c.rwc.WriteString(StatusEnd)
-		c.end()
+		c.stats()
 	case DeleteCmd:
-		return c.delete(string(line[7:]))
+		key := string(bytes.Trim(rest, " "))
+		return c.delete(key)
 	case VersionCmd:
-		c.rwc.WriteString(fmt.Sprintf(StatusVersion, VERSION))
-		c.end()
+		c.version()
 	case QuitCmd:
 		return io.EOF
 	default:
@@ -142,38 +139,79 @@ func (c *conn) get(key string) error {
 	return nil
 }
 
+type setArgs struct {
+	key     []byte
+	flags   int
+	exptime int
+	bytes   int
+	noReply bool
+}
+
+func parseSetArgs(arguments []byte) (setArgs, error) {
+	argFields := bytes.Split(arguments, []byte(" "))
+	if len(argFields) < 4 {
+		return setArgs{}, fmt.Errorf(ClientError.Error(), "set has incorrect number of arguments")
+	}
+
+	args := setArgs{
+		key: argFields[0],
+	}
+
+	if len(argFields) == 5 {
+		if !bytes.Equal(argFields[4], noreply) {
+			return setArgs{}, fmt.Errorf(ClientError.Error(), "last set argument must be empty or noreply")
+		}
+		args.noReply = true
+	}
+
+	var err error
+	if args.flags, err = strconv.Atoi(string(argFields[1])); err != nil {
+		return setArgs{}, fmt.Errorf(ClientError.Error(), fmt.Sprintf("could not parse flags: %s", err))
+	}
+
+	if args.exptime, err = strconv.Atoi(string(argFields[2])); err != nil {
+		return setArgs{}, fmt.Errorf(ClientError.Error(), fmt.Sprintf("could not parse exptime: %s", err))
+	}
+
+	if args.bytes, err = strconv.Atoi(string(argFields[3])); err != nil {
+		return setArgs{}, fmt.Errorf(ClientError.Error(), fmt.Sprintf("could not parse data block size: %s", err))
+	}
+
+	return args, nil
+}
+
 func (c *conn) set(line []byte) error {
 	if c.server.Setter == nil {
-		return Error
+		return ServerError
 	}
 
-	cmd := parseStorageLine(line)
-	item := &Item{
-		Key:   cmd.Key,
-		Flags: cmd.Flags,
-	}
-	item.SetExpires(cmd.Exptime)
-
-	value := make([]byte, cmd.Length+2)
-	n, err := c.Read(value)
+	args, err := parseSetArgs(line)
 	if err != nil {
-		return Error
+		return err
 	}
 
-	// Didn't provide the correct number of bytes
-	if n != cmd.Length+2 {
-		response := &ClientErrorResponse{"bad chunk data"}
-		response.WriteResponse(c.rwc)
-		c.ReadLine() // Read out the rest of the line
-		return Error
+	item := &Item{
+		Key:   string(args.key),
+		Flags: args.flags,
+	}
+	item.SetExpires(int64(args.exptime))
+
+	value := make([]byte, args.bytes+len(crlf))
+	n, err := c.Read(value)
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		return fmt.Errorf(ClientError.Error(), fmt.Sprintf("payload is smaller than provided payload size: %s", err))
 	}
 
-	// Doesn't end with \r\n
+	if err != nil {
+		return fmt.Errorf(ServerError.Error(), fmt.Sprintf("could not read data block: %s", err))
+	}
+
+	if n != args.bytes+len(crlf) {
+		return fmt.Errorf(ServerError.Error(), fmt.Sprintf("data block is of size %d instead of %d", n, args.bytes))
+	}
+
 	if !bytes.HasSuffix(value, crlf) {
-		response := &ClientErrorResponse{"bad chunk data"}
-		response.WriteResponse(c.rwc)
-		c.ReadLine() // Read out the rest of the line
-		return Error
+		return fmt.Errorf(ServerError.Error(), "data block does not end with \\r\\n")
 	}
 
 	// Copy the value into the *Item
@@ -181,11 +219,10 @@ func (c *conn) set(line []byte) error {
 	copy(item.Value, value)
 
 	c.server.Stats.CMDSet.Increment(1)
-	if cmd.Noreply {
+	if args.noReply {
 		go c.server.Setter.Set(item)
 		return nil
 	}
-	defer c.end()
 
 	response := c.server.Setter.Set(item)
 	if response != nil {
@@ -194,6 +231,7 @@ func (c *conn) set(line []byte) error {
 		c.rwc.WriteString(StatusStored)
 	}
 
+	c.end()
 	return nil
 }
 
@@ -210,6 +248,19 @@ func (c *conn) delete(key string) error {
 
 	c.end()
 	return nil
+}
+
+func (c *conn) stats() {
+	for key, value := range c.server.Stats.Snapshot() {
+		fmt.Fprintf(c.rwc, StatusStat, key, value)
+	}
+	c.rwc.WriteString(StatusEnd)
+	c.end()
+}
+
+func (c *conn) version() {
+	c.rwc.WriteString(fmt.Sprintf(StatusVersion, VERSION))
+	c.end()
 }
 
 func (c *conn) Close() {

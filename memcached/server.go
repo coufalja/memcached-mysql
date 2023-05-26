@@ -4,9 +4,7 @@ package memcached
 
 import (
 	"bufio"
-	"bytes"
 	"net"
-	"strconv"
 )
 
 const VERSION = "0.0.0"
@@ -71,20 +69,7 @@ func ListenAndServe(addr string) error {
 	return s.ListenAndServe()
 }
 
-func parseStorageLine(line []byte) *StorageCmd {
-	pieces := bytes.Fields(line) // Skip the actual "set "
-	cmd := &StorageCmd{}
-	// lol, no error handling here
-	// TODO(jsfpdn): error handling.
-	cmd.Key = string(pieces[0])
-	cmd.Flags, _ = strconv.Atoi(string(pieces[1]))
-	cmd.Exptime, _ = strconv.ParseInt(string(pieces[2]), 10, 64)
-	cmd.Length, _ = strconv.Atoi(string(pieces[3]))
-	cmd.Noreply = len(pieces) == 5 && bytes.Equal(pieces[4], noreply)
-	return cmd
-}
-
-// NewServer initialize a new memcached Server.
+// Initialize a new memcached Server.
 func NewServer(listen string, handler RequestHandler) *Server {
 	getter, _ := handler.(Getter)
 	setter, _ := handler.(Setter)
