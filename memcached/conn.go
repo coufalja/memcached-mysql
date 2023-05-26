@@ -18,11 +18,11 @@ type conn struct {
 
 func (c *conn) serve() {
 	defer func() {
-		c.server.Stats.CurrConnections.Decrement(1)
+		c.server.Stats.CurrConnections.Add(-1)
 		c.Close()
 	}()
-	c.server.Stats.TotalConnections.Increment(1)
-	c.server.Stats.CurrConnections.Increment(1)
+	c.server.Stats.TotalConnections.Add(1)
+	c.server.Stats.CurrConnections.Add(1)
 	for {
 		err := c.handleRequest()
 		if err != nil {
@@ -125,13 +125,13 @@ func (c *conn) get(key string) error {
 		return Error
 	}
 
-	c.server.Stats.CMDGet.Increment(1)
+	c.server.Stats.CMDGet.Add(1)
 	response := c.server.Getter.Get(key)
 	if response != nil {
-		c.server.Stats.GetHits.Increment(1)
+		c.server.Stats.GetHits.Add(1)
 		response.WriteResponse(c.rwc)
 	} else {
-		c.server.Stats.GetMisses.Increment(1)
+		c.server.Stats.GetMisses.Add(1)
 	}
 	c.rwc.WriteString(StatusEnd)
 	c.end()
@@ -218,7 +218,7 @@ func (c *conn) set(line []byte) error {
 	item.Value = make([]byte, len(value)-2)
 	copy(item.Value, value)
 
-	c.server.Stats.CMDSet.Increment(1)
+	c.server.Stats.CMDSet.Add(1)
 	if args.noReply {
 		go c.server.Setter.Set(item)
 		return nil

@@ -112,9 +112,7 @@ func TestHandleRequest_Retrieval(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotEmpty(t, b.Bytes())
-
-				// TODO(jsfpdn): Fix race when accessing Stats.*.Count
-				// require.Equal(t, tc.conn.server.Stats.CMDGet.Count, 1)
+				require.Equal(t, tc.conn.server.Stats.CMDGet.Load(), int64(1))
 			}
 		})
 	}
