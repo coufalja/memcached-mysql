@@ -207,11 +207,11 @@ func (c *conn) set(line []byte) error {
 	}
 
 	if n != args.bytes+len(crlf) {
-		return fmt.Errorf(ServerError.Error(), fmt.Sprintf("data block is of size %d instead of %d", n, args.bytes))
+		return fmt.Errorf(ClientError.Error(), fmt.Sprintf("data block is of size %d instead of %d", n, args.bytes))
 	}
 
 	if !bytes.HasSuffix(value, crlf) {
-		return fmt.Errorf(ServerError.Error(), "data block does not end with \\r\\n")
+		return fmt.Errorf(ClientError.Error(), "data block does not end with \\r\\n")
 	}
 
 	// Copy the value into the *Item
